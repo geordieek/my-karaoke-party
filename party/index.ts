@@ -30,10 +30,25 @@ const Horn = z.object({
 	type: z.literal("horn"),
 });
 
-const Message = z.union([AddVideo, RemoveVideo, MarkAsPlayed, Horn]);
+const UpdateSettings = z.object({
+  type: z.literal("update-settings"),
+  settings: z.object({
+    orderByFairness: z.boolean(),
+    autoplay: z.boolean(),
+  }),
+});
+
+const Message = z.union([
+  AddVideo,
+  RemoveVideo,
+  MarkAsPlayed,
+  Horn,
+  UpdateSettings,
+]);
 
 type KaraokePartySettings = {
 	orderByFairness: boolean;
+	autoplay: boolean;
 };
 
 export type Message = z.infer<typeof Message>;
@@ -171,6 +186,7 @@ export default class Server implements Party.Server {
 				playlist: [],
 				settings: {
 					orderByFairness: true,
+					autoplay: true,
 				},
 			};
 

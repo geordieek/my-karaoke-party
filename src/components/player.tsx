@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import YouTube, { type YouTubeProps, type YouTubePlayer } from "react-youtube";
 import { QrCode } from "./qr-code";
 import { type VideoInPlaylist } from "party";
@@ -11,11 +11,14 @@ import { cn } from "~/lib/utils";
 import { Button } from "./ui/ui/button";
 import { MicVocal, SkipForward, Youtube } from "lucide-react";
 import { Spinner } from "./ui/ui/spinner";
+import { useAutoplay } from "~/hooks/useAutoplay";
+import { AUTOPLAY_MESSAGES } from "~/utils/autoplay-constants";
 
 type Props = {
   joinPartyUrl: string;
   video: VideoInPlaylist;
   isFullscreen: boolean;
+  autoplay?: boolean;
   onPlayerEnd: () => void;
 };
 
@@ -23,13 +26,37 @@ export function Player({
   joinPartyUrl,
   video,
   isFullscreen = false,
+  autoplay = false,
   onPlayerEnd,
 }: Props) {
   const playerRef = useRef<YouTubePlayer>(null);
 
   const [isReady, setIsReady] = useState(false);
-  const [showOpenInYouTubeButton, setShowOpenInYouTubeButton] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Use the autoplay hook
+  const {
+    showManualPlayButton,
+    showOpenInYouTubeButton,
+    showDelayedAutoplayMessage,
+    hasAutoRedirected,
+    isWindowFocused,
+    handlePlayerReady,
+    handlePlayerPlay,
+    handlePlayerError,
+    openYouTubeTab,
+    resetManualPlayButton,
+  } = useAutoplay({
+    autoplay,
+    onPlayerEnd,
+    videoId: video.id,
+  });
+
+  // Reset basic state when video changes
+  useEffect(() => {
+    setIsReady(false);
+    setIsPlaying(false);
+  }, [video.id]);
 
   const opts: YouTubeProps["opts"] = {
     playerVars: {
@@ -42,41 +69,31 @@ export function Player({
   };
 
   const onPlayerReady: YouTubeProps["onReady"] = (event) => {
-    console.log("Player ready", { event });
     // access to player in all event handlers via event.target
     playerRef.current = event.target;
 
-    const playerState = event.target.getPlayerState();
+    // Player is ready to play (regardless of current state)
+    setIsReady(true);
 
-    if (playerState !== -1) {
-      setIsReady(true);
-    }
+    // Check actual player state - YouTube player states: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+    const playerState = event.target.getPlayerState();
+    const isPlayerPlaying = playerState === 1; // 1 = playing
+
+    // Use autoplay hook for autoplay logic
+    handlePlayerReady(event.target, isPlayerPlaying);
   };
 
   const onPlayerPlay: YouTubeProps["onPlay"] = (_event) => {
-    console.log("handlePlay");
     setIsPlaying(true);
+    handlePlayerPlay();
   };
 
   const onPlayerPause: YouTubeProps["onPause"] = (_event) => {
-    console.log("handlePause");
     setIsPlaying(false);
   };
 
   const onPlayerError: YouTubeProps["onError"] = (_event) => {
-    setShowOpenInYouTubeButton(true);
-  };
-
-  const openYouTubeTab = () => {
-    window.open(
-      `https://www.youtube.com/watch?v=${video.id}#mykaraokeparty`,
-      "_blank",
-      "fullscreen=yes"
-    );
-
-    if (onPlayerEnd) {
-      onPlayerEnd();
-    }
+    handlePlayerError();
   };
 
   if (showOpenInYouTubeButton) {
@@ -84,7 +101,7 @@ export function Player({
       <div
         className={cn(
           "mx-auto flex h-full w-full flex-col items-center justify-between space-y-6 p-4 pb-1 text-center",
-          isFullscreen && "bg-gradient"
+          isFullscreen && "bg-gradient",
         )}
       >
         <div>
@@ -106,10 +123,20 @@ export function Player({
             This video cannot be embedded. Click the button to open a new tab in
             YouTube.
           </h3>
+          {autoplay && isWindowFocused && !hasAutoRedirected && (
+            <p className="text-lg mb-4 text-muted-foreground">
+              {AUTOPLAY_MESSAGES.AUTO_REDIRECTING}
+            </p>
+          )}
+          {autoplay && !isWindowFocused && (
+            <p className="text-lg mb-4 text-muted-foreground">
+              {AUTOPLAY_MESSAGES.AUTO_REDIRECT_PAUSED}
+            </p>
+          )}
           <Button
             type="button"
             className="w-fit self-center animate-in fade-in zoom-in"
-            onClick={() => openYouTubeTab()}
+            onClick={() => openYouTubeTab(true)}
           >
             Play in YouTube
             <Youtube className="ml-2" />
@@ -134,7 +161,7 @@ export function Player({
           <a
             href={joinPartyUrl}
             target="_blank"
-            className="font-mono text-xl text-white pl-4"
+            className="pl-4 font-mono text-xl text-white"
           >
             {joinPartyUrl.split("//")[1]}
           </a>
@@ -167,7 +194,7 @@ export function Player({
       <div
         className={cn(
           "absolute top-0 w-full text-center animate-in fade-in zoom-in",
-          isPlaying ? "hidden" : "block"
+          isPlaying ? "hidden" : "block",
         )}
       >
         <div
@@ -186,6 +213,33 @@ export function Player({
               size={32}
             />
           </h2>
+          {showDelayedAutoplayMessage && (
+            <p className="text-lg mt-4 text-muted-foreground">
+              {AUTOPLAY_MESSAGES.AUTOPLAY_DELAYED}
+            </p>
+          )}
+          {showManualPlayButton && !isPlaying && (
+            <div className="mt-4">
+              <p className="text-lg mb-2 text-muted-foreground">
+                {AUTOPLAY_MESSAGES.AUTOPLAY_BLOCKED}
+              </p>
+              <Button
+                onClick={() => {
+                  if (playerRef.current) {
+                    try {
+                      playerRef.current.playVideo();
+                      resetManualPlayButton();
+                    } catch (error: unknown) {
+                      console.log("Manual play failed:", error);
+                    }
+                  }
+                }}
+                className="bg-primary hover:bg-primary/90"
+              >
+                Play Video
+              </Button>
+            </div>
+          )}
         </div>
 
         {!isReady && (

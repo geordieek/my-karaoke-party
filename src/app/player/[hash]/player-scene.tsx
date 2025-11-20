@@ -16,6 +16,7 @@ import { SongSearch } from "~/components/song-search";
 import { Button } from "~/components/ui/ui/button";
 import { env } from "~/env";
 import { getUrl } from "~/utils/url";
+import { AUTOPLAY_CONSTANTS } from "~/utils/autoplay-constants";
 
 type Props = {
   party: Party;
@@ -26,6 +27,9 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
   const [playlist, setPlaylist] = useState<KaraokeParty["playlist"]>(
     initialPlaylist.playlist ?? [],
   );
+  const [settings, setSettings] = useState<KaraokeParty["settings"]>(
+    initialPlaylist.settings ?? { orderByFairness: true, autoplay: true },
+  );
 
   const [playHorn] = useSound("/sounds/buzzer.mp3");
   const lastHornTimeRef = useRef<number>(0);
@@ -35,12 +39,14 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
     const now = Date.now();
     const timeSinceLastHorn = now - lastHornTimeRef.current;
 
-    if (timeSinceLastHorn >= 5000) { // 5 seconds in milliseconds
+    if (timeSinceLastHorn >= AUTOPLAY_CONSTANTS.HORN_THROTTLE_MS) {
       toast.success("Someone sent a horn!");
       playHorn();
       lastHornTimeRef.current = now;
     } else {
-      console.log(`Horn throttled. Try again in ${Math.ceil((5000 - timeSinceLastHorn) / 1000)} seconds.`);
+      console.log(
+        `Horn throttled. Try again in ${Math.ceil((AUTOPLAY_CONSTANTS.HORN_THROTTLE_MS - timeSinceLastHorn) / 1000)} seconds.`,
+      );
     }
   };
 
@@ -58,6 +64,12 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
 
       if (Array.isArray(eventData)) {
         setPlaylist(eventData as KaraokeParty["playlist"]);
+      } else if (
+        eventData.orderByFairness !== undefined &&
+        eventData.autoplay !== undefined
+      ) {
+        // This is a settings update
+        setSettings(eventData as KaraokeParty["settings"]);
       }
     },
   });
@@ -93,6 +105,20 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
     );
   };
 
+  const toggleAutoplay = () => {
+    const newSettings = {
+      ...settings,
+      autoplay: !settings.autoplay,
+    };
+    setSettings(newSettings);
+    socket.send(
+      JSON.stringify({
+        type: "update-settings",
+        settings: newSettings,
+      } satisfies Message),
+    );
+  };
+
   const markAsPlayed = () => {
     if (currentVideo) {
       // setShowOpenInYouTubeButton(false);
@@ -116,6 +142,21 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
             {party.name}
           </h1>
         </div>
+
+        <div className="mb-4 px-2">
+          <label className="flex cursor-pointer items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={settings.autoplay}
+              onChange={toggleAutoplay}
+              className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary focus:ring-2 focus:ring-primary"
+            />
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-300">
+              Auto-play
+            </span>
+          </label>
+        </div>
+
         <SongSearch
           key={party.hash}
           playlist={playlist}
@@ -139,6 +180,7 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
                 video={currentVideo}
                 joinPartyUrl={joinPartyUrl}
                 isFullscreen={fullscreen}
+                autoplay={settings.autoplay}
                 onPlayerEnd={() => {
                   markAsPlayed();
                 }}
