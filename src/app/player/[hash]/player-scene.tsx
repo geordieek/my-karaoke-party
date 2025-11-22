@@ -33,6 +33,7 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
 
   const [playHorn] = useSound("/sounds/buzzer.mp3");
   const lastHornTimeRef = useRef<number>(0);
+  const togglePlayPauseRef = useRef<(() => void) | null>(null);
 
   // Throttled horn function
   const playThrottledHorn = () => {
@@ -132,6 +133,24 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
     }
   };
 
+  // Add keyboard shortcuts
+  // f - fullscreen toggle
+  useKeyboardShortcuts("f", toggle, [toggle]);
+  // p - play/pause
+  useKeyboardShortcuts("p", () => togglePlayPauseRef.current?.(), []);
+  // space - play/pause
+  useKeyboardShortcuts(" ", () => togglePlayPauseRef.current?.(), []);
+  // right arrow - skip video
+  useKeyboardShortcuts(
+    "ArrowRight",
+    () => {
+      if (currentVideo) {
+        markAsPlayed();
+      }
+    },
+    [currentVideo, markAsPlayed],
+  );
+
   const joinPartyUrl = getUrl(`/join/${party.hash}`);
 
   return (
@@ -184,6 +203,7 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
                 onPlayerEnd={() => {
                   markAsPlayed();
                 }}
+                onTogglePlayPauseRef={togglePlayPauseRef}
               />
             ) : (
               <EmptyPlayer

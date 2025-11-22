@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import YouTube, { type YouTubeProps, type YouTubePlayer } from "react-youtube";
 import { QrCode } from "./qr-code";
 import { type VideoInPlaylist } from "party";
@@ -20,6 +20,7 @@ type Props = {
   isFullscreen: boolean;
   autoplay?: boolean;
   onPlayerEnd: () => void;
+  onTogglePlayPauseRef?: React.MutableRefObject<(() => void) | null>;
 };
 
 export function Player({
@@ -28,6 +29,7 @@ export function Player({
   isFullscreen = false,
   autoplay = false,
   onPlayerEnd,
+  onTogglePlayPauseRef,
 }: Props) {
   const playerRef = useRef<YouTubePlayer>(null);
 
