@@ -1,7 +1,11 @@
 /* eslint-disable */
 "use client";
 
-import { readLocalStorageValue, useFullscreen } from "@mantine/hooks";
+import {
+  readLocalStorageValue,
+  useFullscreen,
+  useHotkeys,
+} from "@mantine/hooks";
 import type { Party } from "@prisma/client";
 import { ListPlus, Maximize, Minimize, SkipForward, X } from "lucide-react";
 import Image from "next/image";
@@ -134,22 +138,19 @@ export default function PlayerScene({ party, initialPlaylist }: Props) {
   };
 
   // Add keyboard shortcuts
-  // f - fullscreen toggle
-  useKeyboardShortcuts("f", toggle, [toggle]);
-  // p - play/pause
-  useKeyboardShortcuts("p", () => togglePlayPauseRef.current?.(), []);
-  // space - play/pause
-  useKeyboardShortcuts(" ", () => togglePlayPauseRef.current?.(), []);
-  // right arrow - skip video
-  useKeyboardShortcuts(
-    "ArrowRight",
-    () => {
-      if (currentVideo) {
-        markAsPlayed();
-      }
-    },
-    [currentVideo, markAsPlayed],
-  );
+  // f - fullscreen toggle, space - play/pause, right arrow - skip video
+  useHotkeys([
+    ["f", toggle],
+    ["Space", () => togglePlayPauseRef.current?.()],
+    [
+      "ArrowRight",
+      () => {
+        if (currentVideo) {
+          markAsPlayed();
+        }
+      },
+    ],
+  ]);
 
   const joinPartyUrl = getUrl(`/join/${party.hash}`);
 
